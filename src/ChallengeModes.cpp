@@ -1,5 +1,32 @@
 ﻿/*
  * Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
+ *
+ * PATCHED 2026-08-21 (TylerConlee fork, for Hollowpeak): removed two
+ * OnPlayerResurrect overrides below (ChallengeMode_Hardcore and
+ * ChallengeMode_IronMan). That hook doesn't exist in the
+ * liyunfan1223/azerothcore-wotlk Playerbot fork this server runs on --
+ * "marked 'override', but does not override" at compile time. Both
+ * overrides carried the module's own comment acknowledging they were
+ * already a stopgap: "A better implementation is to not allow the
+ * resurrect but this will need a new hook added first."
+ *
+ * Hardcore mode: removal is low-risk. OnPlayerReleasedGhost already marks
+ * the character dead (HARDCORE_DEAD=1) and kicks the session the moment
+ * they release as a ghost, and OnPlayerLogin re-enforces the same kill+
+ * kick on any subsequent login if that flag is set -- both untouched
+ * below. In normal play a hardcore character is already locked out well
+ * before a resurrection scenario would occur.
+ *
+ * Iron Man mode: removal is NOT risk-free, flagging clearly. This was the
+ * only mechanism in the file re-enforcing "stay dead" specifically for
+ * Iron Man after a resurrection attempt -- there is no equivalent
+ * OnPlayerReleasedGhost/OnPlayerLogin fallback for this challenge type.
+ * Every other Iron Man restriction (no potions/flasks, no group invites,
+ * quality-locked gear, no enchanting, no professions) is untouched and
+ * still fully enforced -- only the "resurrection should immediately kill
+ * you again" behavior is not enforced in this build. Worth revisiting if
+ * an equivalent core hook is ever added upstream, or if Iron Man mode
+ * specifically becomes something players want to rely on.
  */
 
 #include "ChallengeModes.h"
@@ -445,18 +472,6 @@ public:
         killed->UpdatePlayerSetting("mod-challenge-modes", HARDCORE_DEAD, 1);
     }
 
-    void OnPlayerResurrect(Player* player, float /*restore_percent*/, bool /*applySickness*/) override
-    {
-        if (!sChallengeModes->challengeEnabledForPlayer(SETTING_HARDCORE, player))
-        {
-            return;
-        }
-        // A better implementation is to not allow the resurrect but this will need a new hook added first
-        player->UpdatePlayerSetting("mod-challenge-modes", HARDCORE_DEAD, 1);
-        player->KillPlayer();
-        player->GetSession()->KickPlayer(std::string("极限模式角色已死亡"));
-    }
-
     void OnPlayerGiveXP(Player* player, uint32& amount, Unit* victim, uint8 xpSource) override
     {
         ChallengeMode::OnPlayerGiveXP(player, amount, victim, xpSource);
@@ -625,16 +640,6 @@ class ChallengeMode_IronMan : public ChallengeMode
 {
 public:
     ChallengeMode_IronMan() : ChallengeMode("ChallengeMode_IronMan", SETTING_IRON_MAN) {}
-
-    void OnPlayerResurrect(Player* player, float /*restore_percent*/, bool /*applySickness*/) override
-    {
-        if (!sChallengeModes->challengeEnabledForPlayer(SETTING_IRON_MAN, player))
-        {
-            return;
-        }
-        // A better implementation is to not allow the resurrect but this will need a new hook added first
-        player->KillPlayer();
-    }
 
     void OnPlayerGiveXP(Player* player, uint32& amount, Unit* victim, uint8 xpSource) override
     {
